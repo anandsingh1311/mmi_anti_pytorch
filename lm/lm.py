@@ -11,7 +11,7 @@ import torchtext.data as data
 import torchtext.datasets as datasets
 from collections import Counter, defaultdict, OrderedDict
 
-import model
+import lm.model as model
 
 parser = argparse.ArgumentParser(description='PyTorch Wikitext-2 RNN/LSTM Language Model')
 parser.add_argument('--data', type=str, default='./data/',
@@ -46,7 +46,7 @@ parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 parser.add_argument('--log-interval', type=int, default=100, metavar='N',
                     help='report interval')
-parser.add_argument('--save', type=str,  default='model.pt',
+parser.add_argument('--save', type=str, default='model.pt',
                     help='path to save the final model')
 args = parser.parse_args()
 
@@ -61,7 +61,7 @@ if torch.cuda.is_available():
 ############################
 # Load data
 ############################
-print ("Loading data...")
+print("Loading data...")
 
 PAD_WORD = '<blank>'
 eval_batch_size = args.eval_batch_size
@@ -73,34 +73,36 @@ train_data = datasets.TranslationDataset(path=args.data + '/train', exts=('.en',
 val_data = datasets.TranslationDataset(path=args.data + '/valid', exts=('.en', '.de'), fields=(src, trg))
 test_data = datasets.TranslationDataset(path=args.data + '/test', exts=('.en', '.de'), fields=(src, trg))
 
-print ("DONE\n")
+print("DONE\n")
 
 ############################
 # Load vocab
 ############################
 
-print ("Loading vocab...")
+print("Loading vocab...")
 
 vocab = dict(torch.load(args.dict_path, "text"))
 v = vocab['tgt']
 v.stoi = defaultdict(lambda: 0, v.stoi)
-src.vocab = v; trg.vocab = v
+src.vocab = v
+trg.vocab = v
 ntokens = len(v.itos)
 
-print "DONE. Vocab size:", ntokens, "\n"
+print("DONE. Vocab size:", ntokens, "\n")
 
 ############################
 # Build the model
 ############################
 
-print ("Building model...")
+print("Building model...")
 
 model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied)
 if args.cuda:
     model.cuda()
 criterion = nn.CrossEntropyLoss()
 
-print ("Done\n")
+print("Done\n")
+
 
 ############################
 # Training code
@@ -123,15 +125,17 @@ def evaluate(data_source):
     batch_counter = 0
     samples_num = len(data_source.examples)
     data_iter = data.BucketIterator(dataset=data_source, batch_size=eval_batch_size,
-        sort_key=lambda x: data.interleave_keys(len(x.src), len(x.trg)))
+                                    sort_key=lambda x: data.interleave_keys(len(x.src), len(x.trg)))
 
-    while(eval_batch_size * batch_counter < samples_num):
+    while (eval_batch_size * batch_counter < samples_num):
         batch = next(iter(data_iter))
         source = batch.src
         targets = batch.trg.view(-1)
         output, hidden = model(source, hidden)
         output_flat = output.view(-1, ntokens)
-        ss = []; s = 0; sseq = []
+        ss = [];
+        s = 0;
+        sseq = []
         tt = targets.data.cpu().numpy()
         for i in range(0, eval_batch_size):
             del sseq[:]
@@ -147,12 +151,13 @@ def evaluate(data_source):
 
     return total_loss[0] / len(data_source)
 
+
 def train():
     # Turn on training mode which enables dropout.
     model.train()
     hidden = model.init_hidden(args.batch_size)
-    train_iter = data.BucketIterator(dataset=train_data, batch_size=args.batch_size, 
-        sort_key=lambda x: data.interleave_keys(len(x.src), len(x.trg)))
+    train_iter = data.BucketIterator(dataset=train_data, batch_size=args.batch_size,
+                                     sort_key=lambda x: data.interleave_keys(len(x.src), len(x.trg)))
     lr = args.lr
     best_val_loss = None
 
@@ -163,7 +168,7 @@ def train():
     start_time = time.time()
     samples_num = len(train_data.examples)
 
-    while(epoch < args.epochs):
+    while (epoch < args.epochs):
         batch = next(iter(train_iter))
         source = batch.src
         targets = batch.trg.view(-1)
@@ -188,9 +193,9 @@ def train():
             cur_loss = total_loss[0] / args.log_interval
             elapsed = time.time() - start_time
             print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
-                    'loss {:5.2f} | ppl {:8.2f}'.format(
+                  'loss {:5.2f} | ppl {:8.2f}'.format(
                 epoch, batch_counter, len(train_data) // args.batch_size, lr,
-                elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
+                                      elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
             total_loss = 0
             start_time = time.time()
 
@@ -200,8 +205,8 @@ def train():
             val_loss = evaluate(val_data)
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
-                'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
-                                           val_loss, math.exp(val_loss)))
+                  'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
+                                             val_loss, math.exp(val_loss)))
             print('-' * 89)
             # Save the model if the validation loss is the best we've seen so far.
             if not best_val_loss or val_loss < best_val_loss:

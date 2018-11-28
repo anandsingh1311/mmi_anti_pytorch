@@ -32,6 +32,7 @@ class LossComputeBase(nn.Module):
              torchtext vocab object representing the target output
         normalzation (str): normalize by "sents" or "tokens"
     """
+
     def __init__(self, generator, tgt_vocab):
         super(LossComputeBase, self).__init__()
         self.generator = generator
@@ -138,9 +139,7 @@ class LossComputeBase(nn.Module):
         """
         pred = scores.max(1)[1]
         non_padding = target.ne(self.padding_idx)
-        num_correct = pred.eq(target) \
-                          .masked_select(non_padding) \
-                          .sum()
+        num_correct = pred.eq(target).masked_select(non_padding).sum()
         return onmt.Statistics(loss[0], non_padding.sum(), num_correct)
 
     def _bottle(self, v):
@@ -154,6 +153,7 @@ class NMTLossCompute(LossComputeBase):
     """
     Standard NMT Loss Computation.
     """
+
     def __init__(self, generator, tgt_vocab, normalization="sents",
                  label_smoothing=0.0):
         super(NMTLossCompute, self).__init__(generator, tgt_vocab)
@@ -207,6 +207,35 @@ class NMTLossCompute(LossComputeBase):
         stats = self._stats(loss_data, scores.data, target.view(-1).data)
 
         return loss, stats
+
+
+class StatisticalWeightedLoss(NMTLossCompute):
+
+    def __init__(self,
+                 generator,
+                 tgt_vocab,
+                 normalization="sents",
+                 label_smoothing=0.0,
+                 alpha=0.5, beta=0.5, a=0.33, b=3, tau=1, c=0.33):
+        super().__init__(generator, tgt_vocab, normalization, label_smoothing)
+
+        def _generalisation_suppressor(y, y_batch):
+            return
+
+        def _length_moderator(y, y_batch):
+            return
+
+        def _phi(y, y_batch):
+            return alpha * _generalisation_suppressor(y, y_batch) + beta * _length_moderator(y, y_batch)
+
+        self.phi = _phi
+
+    def _compute_loss(self, batch, output, target):
+        # likelihood = self.generator(self._bottle(output))
+        # loss = self.phi()
+        # scores = None
+        # stats = self._stats(loss=loss, scores=scores, target=target.view(-1).data)
+        return None, None
 
 
 def filter_shard_state(state):

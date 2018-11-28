@@ -187,9 +187,16 @@ def make_loss_compute(model, tgt_vocab, opt):
         compute = onmt.modules.CopyGeneratorLossCompute(
             model.generator, tgt_vocab, opt.copy_attn_force)
     else:
-        compute = onmt.Loss.NMTLossCompute(
-            model.generator, tgt_vocab,
-            label_smoothing=opt.label_smoothing)
+        if opt.srm:
+            compute = onmt.Loss.StatisticalWeightedLoss(
+                model.generator,
+                tgt_vocab,
+                label_smoothing=opt.label_smoothing)
+        else:
+            compute = onmt.Loss.NMTLossCompute(
+                model.generator,
+                tgt_vocab,
+                label_smoothing=opt.label_smoothing)
 
     if use_gpu(opt):
         compute.cuda()
